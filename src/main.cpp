@@ -22,9 +22,9 @@ AccelStepper stepperZ(AccelStepper::DRIVER, stepperZ_shoulder_abduction_Step_pin
 long maxSpeed = 10000.0; // max speed possible for stepper motor
 long accel = 50000.0; // how fast does the stepper motor moves
 
-// NEW: back-and-forth params using setSpeed() + runSpeed()
+// NEW: back-and-forth params using AccelStepper acceleration (moveTo + run)
 long travelDistance = 8000;     // travel limit in steps
-long runSpeedValue = 10000;     // steps per second (use positive magnitude)
+long runSpeedValue = 10000;     // used as max speed
 int direction = 1;              // 1 = forward, -1 = backward
 
 void setup() {
@@ -32,45 +32,38 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   Serial.println("ESP32 PlatformIO AccelStepper example");
 
-  stepperX.setMaxSpeed(maxSpeed);
+  // Use run() so acceleration is applied; set max speed and acceleration
+  stepperX.setMaxSpeed(runSpeedValue);
   stepperX.setAcceleration(accel);
 
-  stepperY.setMaxSpeed(maxSpeed);
+  stepperY.setMaxSpeed(runSpeedValue);
   stepperY.setAcceleration(accel);
 
-  stepperZ.setMaxSpeed(maxSpeed);
+  stepperZ.setMaxSpeed(runSpeedValue);
   stepperZ.setAcceleration(accel);
 
-  // start from zero and set initial constant speed (will be stepped by runSpeed)
-  stepperX.setSpeed(runSpeedValue * direction);
-  stepperY.setSpeed(runSpeedValue * direction);
-  stepperZ.setSpeed(runSpeedValue * direction);
-
-  // remove moveTo() usage since runSpeed() drives continuous motion
-  // stepperX.moveTo(8000);
-  // stepperY.moveTo(8000);
-  // stepperZ.moveTo(8000);
+  // start moving to the initial target (will accelerate)
+  stepperX.moveTo(travelDistance);
+  stepperY.moveTo(travelDistance);
+  stepperZ.moveTo(travelDistance);
 }
 
 
 void loop() {
-  // set speeds each loop to ensure direction change is applied immediately
-  stepperX.setSpeed(runSpeedValue * direction);
-  stepperY.setSpeed(runSpeedValue * direction);
-  stepperZ.setSpeed(runSpeedValue * direction);
+  // run() respects acceleration/decelleration and is non-blocking
+  stepperX.run();
+  stepperY.run();
+  stepperZ.run();
 
-  // runSpeed executes stepping at the set constant speed (non-blocking)
-  stepperX.runSpeed();
-  stepperY.runSpeed();
-  stepperZ.runSpeed();
+  // when primary axis (Y) reaches its target, toggle direction and set new targets
+  if (stepperY.distanceToGo() == 0) {
+    direction = -direction;
+    long target = direction * travelDistance;
+    stepperX.moveTo(target);
+    stepperY.moveTo(target);
+    stepperZ.moveTo(target);
 
-  // check primary axis (Y) for limit crossing and toggle direction when reached
-  long pos = stepperY.currentPosition();
-  if (direction > 0 && pos >= travelDistance) {
-    direction = -1;
-    Serial.println("Reversing direction -> BACK");
-  } else if (direction < 0 && pos <= -travelDistance) {
-    direction = 1;
-    Serial.println("Reversing direction -> PORT");
+    if (direction > 0) Serial.println("Reversing direction -> PORT");
+    else Serial.println("Reversing direction -> BACK");
   }
 }
