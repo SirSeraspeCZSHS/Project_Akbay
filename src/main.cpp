@@ -15,30 +15,46 @@ const int LED_PIN = 2;
 #define stepperZ_shoulder_abduction_Dir_pin 14 // pin for stepper Z axis' direction
 
 
-AccelStepper stepperX(AccelStepper::DRIVER, stepperX_elbow_Step_pin, stepperX_elbow_Dir_pin); 
-AccelStepper stepperY(AccelStepper::DRIVER, stepperY_shoulder_flexion_Step_pin, stepperY_shoulder_flexion_Dir_pin); 
+AccelStepper stepperX(AccelStepper::DRIVER, stepperX_elbow_Step_pin, stepperX_elbow_Dir_pin); // create an object for stepper X axis
+AccelStepper stepperY(AccelStepper::DRIVER, stepperY_shoulder_flexion_Step_pin, stepperY_shoulder_flexion_Dir_pin); // create an object for stepper X axis
 AccelStepper stepperZ(AccelStepper::DRIVER, stepperZ_shoulder_abduction_Step_pin, stepperZ_shoulder_abduction_Dir_pin);
 
+long maxSpeed = 5000.0; // max speed possible for stepper motor
+long accel = 5000.0; // how fast does the stepper motor moves
+
+void setup() {
   Serial.begin(115200);
   pinMode(LED_PIN, OUTPUT);
   Serial.println("ESP32 PlatformIO AccelStepper example");
 
-  stepperY.setMaxSpeed(1000);
-  stepperY.setAcceleration(200);
-  stepperY.moveTo(1000);
+  stepperX.setMaxSpeed(maxSpeed);
+  stepperX.setAcceleration(accel);
+
+  stepperY.setMaxSpeed(maxSpeed);
+  stepperY.setAcceleration(accel);
+
+  stepperZ.setMaxSpeed(maxSpeed);
+  stepperZ.setAcceleration(accel);
+
+  stepperX.moveTo(2000);
+  stepperY.moveTo(2000);
+  stepperZ.moveTo(2000);
+
+
 }
 
+
 void loop() {
-  digitalWrite(LED_PIN, HIGH);
-  // Non-blocking: run() steps the motor toward the target
-  if (stepperY.distanceToGo() != 0) {
+  if (stepperY.distanceToGo() != 0 || stepperX.distanceToGo() != 0 || stepperZ.distanceToGo() != 0) {
     stepperY.run();
+    stepperX.run();
+    stepperZ.run();
   } else {
     // reverse direction when target reached
-    stepperY.moveTo(-stepperY.currentPosition());
-    delay(200);
+    stepperX.moveTo(-stepperY.currentPosition());
+     stepperY.moveTo(-stepperY.currentPosition()); 
+     stepperZ.moveTo(-stepperY.currentPosition());
+  
   }
-  digitalWrite(LED_PIN, LOW);
-  delay(10);
-  //test commit
 }
+
