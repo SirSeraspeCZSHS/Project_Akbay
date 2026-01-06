@@ -4,10 +4,10 @@
 const int LED_PIN = 2;
 
 // Set these pins to match your wiring
-const int STEP_PIN = 18;
-const int DIR_PIN = 19;
+#define stepperYStep_pin 25 // pin for stepper Y axis' driver
+#define stepperYDir_pin 27 // pin for stepper Y axis' direction
 
-AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
+AccelStepper stepperX(AccelStepper::DRIVER, stepperXStep_pin, stepperXDir_pin); // create an object for stepper X axis
 
 void setup() {
   Serial.begin(115200);
