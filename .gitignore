@@ -1,0 +1,5 @@
+.pio/
+.pioenvs/
+.vscode/
+build/
+.env
