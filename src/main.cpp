@@ -1,117 +1,102 @@
- #include <Arduino.h>
+#include <Arduino.h>
 #include <AccelStepper.h>
 
- const int LED_PIN = 2;
+// stepper pins (match your wiring)
+#define STEP_X 26
+#define DIR_X 16
 
-// Set these pins to match your wiring
+#define STEP_Y 25
+#define DIR_Y 27
 
-#define stepperX_elbow_Step_pin 26 // pin for stepper X axis' driver
-#define stepperX_elbow_Dir_pin 16 // pin for stepper X axis' direction/dating 16
-#define XLeftbutton 14 // pin for X axis left button
+#define STEP_Z 17
+#define DIR_Z 14
 
-#define stepperY_shoulder_flexion_Step_pin 25 // pin for stepper Y axis' driver
-#define stepperY_shoulder_flexion_Dir_pin 27 // pin for stepper Y axis' direction
-#define YTopbutton13 13 //pin for Y axis  button
+// control buttons (buttons to GND, use internal pullups)
+const int BTN_CW = 13;   // clockwise
+const int BTN_CCW = 5;   // counter-clockwise
 
-#define stepperZ_shoulder_abduction_Step_pin 17 // pin for stepper Z axis' driver, dating 17
-#define stepperZ_shoulder_abduction_Dir_pin 14 // pin for stepper Z axis' direction
+AccelStepper stepperX(AccelStepper::DRIVER, STEP_X, DIR_X);
+AccelStepper stepperY(AccelStepper::DRIVER, STEP_Y, DIR_Y);
+AccelStepper stepperZ(AccelStepper::DRIVER, STEP_Z, DIR_Z);
 
+// runtime parameters
+const float RUN_SPEED = 1200.0f;   // steps per second (magnitude)
+const unsigned long DEBOUNCE_MS = 50UL;
 
-AccelStepper stepperX(AccelStepper::DRIVER, stepperX_elbow_Step_pin, stepperX_elbow_Dir_pin); // create an object for stepper X axis
-AccelStepper stepperY(AccelStepper::DRIVER, stepperY_shoulder_flexion_Step_pin, stepperY_shoulder_flexion_Dir_pin); // create an object for stepper X axis
-AccelStepper stepperZ(AccelStepper::DRIVER, stepperZ_shoulder_abduction_Step_pin, stepperZ_shoulder_abduction_Dir_pin);
-
-long maxSpeed = 10000.0; // max speed possible for stepper motor
-long accel = 50000.0; // how fast does the stepper motor moves
-
-// NEW: back-and-forth params using AccelStepper acceleration (moveTo + run)
-long travelDistance = 8000;     // travel limit in steps
-long runSpeedValue = 10000;     // used as max speed
-int direction = 1;              // 1 = forward, -1 = backward
-
-// Start button config
-const int startButtonPin = YTopbutton13;
-bool running = false;
-unsigned long lastDebounceTime = 0;
-const unsigned long debounceDelay = 50;
-int lastButtonState = HIGH;
-
+// debounce state for both buttons
+int lastRawCW = HIGH, lastRawCCW = HIGH;
+int stableCW = HIGH, stableCCW = HIGH;
+unsigned long lastDebounceCW = 0, lastDebounceCCW = 0;
 
 void setup() {
   Serial.begin(115200);
-  pinMode(LED_PIN, OUTPUT);
-  Serial.println("ESP32 PlatformIO AccelStepper example");
 
-  // Use run() so acceleration is applied; set max speed and acceleration
-  stepperX.setMaxSpeed(runSpeedValue);
-  stepperX.setAcceleration(accel);
-  
-  stepperY.setMaxSpeed(runSpeedValue);
-  stepperY.setAcceleration(accel);
+  pinMode(BTN_CW, INPUT_PULLUP);
+  pinMode(BTN_CCW, INPUT_PULLUP);
 
+  // configure steppers (using runSpeed() => setSpeed() controls direction/velocity)
+  stepperX.setMaxSpeed(RUN_SPEED);
+  stepperX.setCurrentPosition(0);
 
-  stepperZ.setMaxSpeed(runSpeedValue);
-  stepperZ.setAcceleration(accel);
+  stepperY.setMaxSpeed(RUN_SPEED);
+  stepperY.setCurrentPosition(0);
 
+  stepperZ.setMaxSpeed(RUN_SPEED);
+  stepperZ.setCurrentPosition(0);
 
-  // start moving to the initial target (will accelerate)
-  stepperX.moveTo(travelDistance);
-  stepperY.moveTo(travelDistance);
-  stepperZ.moveTo(travelDistance);
-
-  // button as input with pullup (press to GND)
-  pinMode(startButtonPin, INPUT_PULLUP);
-
-  // do NOT start moving until button pressed
-  // steppers remain idle until running == true
+  Serial.println("Button control ready. BTN_CW=GPIO13, BTN_CCW=GPIO5");
 }
 
-
-
 void loop() {
-  // run() respects acceleration/decelleration and is non-blocking
-  // Check start button (debounced) — latched start when button goes LOW
-  int reading = digitalRead(startButtonPin);
-  if (reading != lastButtonState) {
-    lastDebounceTime = millis();
-  }
+  // read raw
+  int rawCW = digitalRead(BTN_CW);
+  int rawCCW = digitalRead(BTN_CCW);
 
-  if ((millis() - lastDebounceTime) > debounceDelay) {
-    if (!running && reading == LOW) {
-      // button pressed -> start motion
-      running = true;
-      direction = 1;
-      long target = direction * travelDistance;
-  stepperX.moveTo(target);
-  stepperY.moveTo(target);
-  stepperZ.moveTo(target);
- Serial.println("Start button pressed: starting steppers");
-      digitalWrite(LED_PIN, HIGH);
+  // debounce CW button
+  if (rawCW != lastRawCW) lastDebounceCW = millis();
+  if (millis() - lastDebounceCW > DEBOUNCE_MS) {
+    if (rawCW != stableCW) {
+      stableCW = rawCW;
+      Serial.print("BTN_CW ");
+      Serial.println(stableCW == HIGH ? "pressed" : "released"); // INPUT_PULLUP: LOW = pressed
+    }
+  }
+  lastRawCW = rawCW;
+
+  // debounce CCW button
+  if (rawCCW != lastRawCCW) lastDebounceCCW = millis();
+  if (millis() - lastDebounceCCW > DEBOUNCE_MS) {
+    if (rawCCW != stableCCW) {
+      stableCCW = rawCCW;
+      Serial.print("BTN_CCW ");
+      Serial.println(stableCCW == HIGH ? "pressed" : "released"); // INPUT_PULLUP: LOW = pressed
+    }
+  }
+  lastRawCCW = rawCCW;
+
+  // If both buttons have the same debounced state -> STOP all steppers
+  if (stableCW == stableCCW) {
+    stepperX.setSpeed(0);
+    stepperY.setSpeed(0);
+    stepperZ.setSpeed(0);
+  } else {
+    // Buttons differ: determine which one is pressed (LOW)
+    if (stableCW == LOW) {
+      // CW pressed -> clockwise (positive)
+      stepperX.setSpeed(RUN_SPEED);
+      stepperY.setSpeed(RUN_SPEED);
+      stepperZ.setSpeed(RUN_SPEED);
+    } else if (stableCCW == LOW) {
+      // CCW pressed -> counter-clockwise (negative)
+      stepperX.setSpeed(-RUN_SPEED);
+      stepperY.setSpeed(-RUN_SPEED);
+      stepperZ.setSpeed(-RUN_SPEED);
 
     }
- }
-   lastButtonState = reading;
-
-if (!running) {
-    // not running yet — do nothing
-    return;
   }
 
-  // run() respects acceleration/deceleration and is non-blocking
-  stepperX.run();
-  stepperY.run();
-  stepperZ.run();
-
-   
-  // when primary axis (Y) reaches its target, toggle direction and set new targets
-  if (stepperY.distanceToGo() == 0) {
-    direction = -direction;
-    long target = direction * travelDistance;
-    stepperX.moveTo(target);
-    stepperY.moveTo(target);
-    stepperZ.moveTo(target);
-
-    if (direction > 0) Serial.println("Reversing direction -> PORT");
-    else Serial.println("Reversing direction -> BACK");
-  }
+  // Run steppers at the setSpeed (non-blocking). If speed==0 they won't step.
+  stepperX.runSpeed();
+  stepperY.runSpeed();
+  stepperZ.runSpeed();
 }
