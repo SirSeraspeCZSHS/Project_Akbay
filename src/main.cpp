@@ -6,14 +6,14 @@
 
 
 // stepper pins (match your wiring)
-#define STEP_ARM 26
-#define DIR_ARM 16
+#define STEP_ARM 25
+#define DIR_ARM 27
 
-#define STEP_BICEP 25
-#define DIR_BICEP 27
+#define STEP_BICEP 17
+#define DIR_BICEP 14
 
-#define STEP_SHOULDER 17
-#define DIR_SHOULDER 14
+#define STEP_SHOULDER 26
+#define DIR_SHOULDER 16
 
 // control buttons (buttons to GND, use internal pullups)
 const int ARM_UP = 2;   
