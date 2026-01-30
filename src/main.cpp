@@ -4,16 +4,21 @@
 #include <MFRC522DriverSPI.h>
 #include <MFRC522DriverPinSimple.h>
 
+#ifndef ENABLE_SHOULDER
+#define ENABLE_SHOULDER 0  // set to 1 to enable shoulder stepper & buttons
+#endif
 
 // stepper pins (match your wiring)
-#define STEP_ARM 25
-#define DIR_ARM 27
+#define STEP_ARM 17
+#define DIR_ARM 14
 
-#define STEP_BICEP 17
-#define DIR_BICEP 14
+#define STEP_BICEP 25
+#define DIR_BICEP 27
 
+#if ENABLE_SHOULDER
 #define STEP_SHOULDER 26
 #define DIR_SHOULDER 16
+#endif
 
 // control buttons (buttons to GND, use internal pullups)
 const int ARM_UP = 2;   
@@ -25,7 +30,9 @@ const int SHOULDER_DOWN = 39;
 
 AccelStepper stepperArm(AccelStepper::DRIVER, STEP_ARM, DIR_ARM);
 AccelStepper stepperBicep(AccelStepper::DRIVER, STEP_BICEP, DIR_BICEP);
+#if ENABLE_SHOULDER
 AccelStepper stepperShoulder(AccelStepper::DRIVER, STEP_SHOULDER, DIR_SHOULDER);
+#endif
 
 MFRC522DriverPinSimple ss_pin(5);
 MFRC522DriverSPI driver{ss_pin};
@@ -76,8 +83,12 @@ void setup() {
   pinMode(ARM_DOWN, INPUT);
   pinMode(BICEP_UP, INPUT);
   pinMode(BICEP_DOWN, INPUT);
+#if ENABLE_SHOULDER
   pinMode(SHOULDER_UP, INPUT);
   pinMode(SHOULDER_DOWN, INPUT);
+#else
+  // Shoulder buttons disabled
+#endif
 
   mfrc522.PCD_Init();
   Serial.println("RFID + Button Test Started");
@@ -120,18 +131,31 @@ void setup() {
   stepperBicep.setMaxSpeed(RUN_SPEED);
   stepperBicep.setCurrentPosition(0);
 
+#if ENABLE_SHOULDER
   stepperShoulder.setMaxSpeed(RUN_SPEED);
   stepperShoulder.setCurrentPosition(0);
+#else
+  shoulderAtLimit = true; // shoulder disabled
+#endif
 
   // initialize tracking from the current (zero) positions
   lastPosArm = stepperArm.currentPosition();
   lastPosBicep = stepperBicep.currentPosition();
+#if ENABLE_SHOULDER
   lastPosShoulder = stepperShoulder.currentPosition();
+  stepsShoulder = (unsigned long)abs(lastPosShoulder);
+#else
+  lastPosShoulder = 0; // Shoulder disabled
+  stepsShoulder = 0;
+#endif
   stepsArm = (unsigned long)abs(lastPosArm);
   stepsBicep = (unsigned long)abs(lastPosBicep);
-  stepsShoulder = (unsigned long)abs(lastPosShoulder);
 
+#if ENABLE_SHOULDER
   Serial.println("Button control ready. ARM/BICEP/SHOULDER up/down control enabled");
+#else
+  Serial.println("Button control ready. ARM/BICEP up/down control enabled. Shoulder disabled.");
+#endif
   Serial.println("Each motor has a max of 20000 steps from power-up to avoid jams.");
 }
 
@@ -185,8 +209,10 @@ void loop() {
   debounceButton(BICEP_UP, lastRawBicepUp, stableBicepUp, lastDebounceBicepUp, "BICEP_UP");
   debounceButton(BICEP_DOWN, lastRawBicepDown, stableBicepDown, lastDebounceBicepDown, "BICEP_DOWN");
   
+#if ENABLE_SHOULDER
   debounceButton(SHOULDER_UP, lastRawShoulderUp, stableShoulderUp, lastDebounceShoulderUp, "SHOULDER_UP");
   debounceButton(SHOULDER_DOWN, lastRawShoulderDown, stableShoulderDown, lastDebounceShoulderDown, "SHOULDER_DOWN");
+#endif
 
   // ARM control (prevent moving past 0..MAX_STEPS)
   if (stableArmUp == HIGH && stableArmDown == LOW) {
@@ -230,6 +256,7 @@ void loop() {
     stepperBicep.setSpeed(0);  // STOP
   }
 
+#if ENABLE_SHOULDER
   // SHOULDER control (prevent moving past 0..MAX_STEPS)
   if (stableShoulderUp == HIGH && stableShoulderDown == LOW) {
     if (!shoulderAtLimit && stepperShoulder.currentPosition() < (long)MAX_STEPS) {
@@ -250,13 +277,18 @@ void loop() {
   } else {
     stepperShoulder.setSpeed(0);  // STOP
   }
+#else
+  // Shoulder disabled: no control or movement
+#endif
 
 
 
   // Run steppers at the setSpeed (non-blocking). If speed==0 they won't step.
   stepperArm.runSpeed();
   stepperBicep.runSpeed();
+#if ENABLE_SHOULDER
   stepperShoulder.runSpeed();
+#endif
 
   // update positions and enforce hard limits (clamp and disable when reached)
   long p;
@@ -297,6 +329,7 @@ void loop() {
     }
   }
 
+#if ENABLE_SHOULDER
   p = stepperShoulder.currentPosition();
   if (p != lastPosShoulder) {
     lastPosShoulder = p;
@@ -314,4 +347,7 @@ void loop() {
       stepsShoulder = 0;
     }
   }
+#else
+  // Shoulder disabled: skip tracking
+#endif
 }
